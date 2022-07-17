@@ -18,6 +18,9 @@ function generateMSF(app,savePath,saveOption,tableOption)
         yR = yR(~isnan(xSpin));
         ySpin = ySpin(~isnan(xSpin));
         xSpin = xSpin(~isnan(xSpin));
+        spinLength = length(xSpin);
+        invSpinLength = 1/spinLength;
+        onesVector_Q = ones(rangeQxSize,1);
         parDataQ = parallel.pool.DataQueue;
         msfDialog = uiprogressdlg(app.IceScannerUI,'Title','Magnetic structure factor','Message',...
             'Generating the magnetic structure factor. This may take several minutes.');
@@ -26,7 +29,7 @@ function generateMSF(app,savePath,saveOption,tableOption)
 
         parfor x = 1:rangeQxSize
             qx = range_qx(x);
-            q_dot_r_xComp = (qx*xR); %q_dot_r = (qx*xR + qy*yR);
+            q_dot_r_xComp = (qx*xR); 
             % Determine the scattering unit vector
             qNorm = sqrt((qx^2*onesVector_Q')+range_qy.^2);
             qHat_x = qx./qNorm;
@@ -35,8 +38,6 @@ function generateMSF(app,savePath,saveOption,tableOption)
             q_dot_S = qHat_x.*xSpin + qHat_y.*ySpin;
             q_dot_S_dot_qHat_x = q_dot_S.*qHat_x;
             q_dot_S_dot_qHat_y = q_dot_S.*qHat_y;
-            %sPerp_x = xSpin - q_dot_S.*qHat_x;
-            %sPerp_y = ySpin - q_dot_S.*qHat_y;
             % Define dot product vector between q and r_ij
             q_dot_r = (onesVector_Q'.*q_dot_r_xComp + range_qy.*yR);
             % Calculate A and B
