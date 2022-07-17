@@ -1,0 +1,13 @@
+cff-version: 1.2.0
+title: "IceScanner - Artificial spin ice analysis wizard"
+message: Please cite this software using these metadata.
+version: 1.0.0
+date-released: 2021-11-09
+type: software
+doi: 10.5281/zenodo.5664804 
+authors:
+  - given-names: "Dayne Sasaki"
+    family-names: "Sasaki"
+    email: "dysasaki@ucdavis.edu"
+    affiliation: "University of California - Davis"
+    orcid: "https://orcid.org/0000-0002-3800-992X"
