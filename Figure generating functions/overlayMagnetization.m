@@ -1,5 +1,5 @@
 % Plots the magnetization vectors over an image
-function overlayMagnetization(app,axisFrame)
+function overlayMagnetization(app,axisFrame,latticeOption)
     app.vd.whiteOffsetX = vertcat(app.vd.magnet(vertcat(app.vd.magnet.projection) > 0).spinPlotXOffset);
     app.vd.whiteOffsetY = vertcat(app.vd.magnet(vertcat(app.vd.magnet.projection) > 0).spinPlotYOffset);
     app.vd.whiteVectorX = 14*cosd(vertcat(app.vd.magnet(vertcat(app.vd.magnet.projection) > 0).spinAngle));
@@ -23,5 +23,15 @@ function overlayMagnetization(app,axisFrame)
     plot(axisFrame,vertcat(app.vd.magnet(OBIWMags).colXPos),vertcat(app.vd.magnet(OBIWMags).rowYPos),'bs','MarkerSize',7,'LineWidth',1);
     plot(axisFrame,vertcat(app.vd.magnet(TWBBMags).colXPos),vertcat(app.vd.magnet(TWBBMags).rowYPos),'ro','MarkerSize',7,'LineWidth',1);
     plot(axisFrame,vertcat(app.vd.magnet(TBBWMags).colXPos),vertcat(app.vd.magnet(TBBWMags).rowYPos),'bo','MarkerSize',7,'LineWidth',1);
+    switch latticeOption
+        case 'on'
+            for j = 1:length(app.vd.magnet)
+                xText = app.vd.magnet(j).colXPos;
+                yText = app.vd.magnet(j).rowYPos;
+                a = round(app.vd.magnet(j).xR);
+                b = round(app.vd.magnet(j).yR);
+                text(xText,yText,sprintf('(%i,%i)',a,b),'FontSize',3,'Color','green');
+            end
+    end
     hold(axisFrame,'off');
 end
