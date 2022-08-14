@@ -28,9 +28,9 @@ function overlayMagnetization(app,axisFrame,latticeOption)
             for j = 1:length(app.vd.magnet)
                 xText = app.vd.magnet(j).colXPos;
                 yText = app.vd.magnet(j).rowYPos;
-                a = round(app.vd.magnet(j).xR);
-                b = round(app.vd.magnet(j).yR);
-                text(xText,yText,sprintf('(%i,%i)',a,b),'FontSize',3,'Color','green');
+                a = app.vd.magnet(j).xR;
+                b = app.vd.magnet(j).yR;
+                text(xText,yText,sprintf('(%.1f,%.1f)',a,b),'FontSize',3,'Color','green');
             end
     end
     hold(axisFrame,'off');

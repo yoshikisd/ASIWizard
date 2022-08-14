@@ -30,7 +30,7 @@ function [MSF,MSFTable] = generateMSF(app,steps,qMax,xSpin,ySpin,xR,yR,method,ty
 
     try
         % Define qx and qy positions
-        range_qx = linspace(-qMax*2*pi,qMax*2*pi,steps); range_qy = range_qx;
+        range_qx = linspace(-qMax*2*pi,qMax*2*pi,steps); range_qy = range_qx; 
         % Define the qx range for the 1st/4th quadrant
         qx_Q1_Range = range_qx(steps/2+1:end);
         % Define the MSF in "2D image" and table form
@@ -46,10 +46,19 @@ function [MSF,MSFTable] = generateMSF(app,steps,qMax,xSpin,ySpin,xR,yR,method,ty
         % Remove all NaN magnets
         xR = xR(~isnan(xSpin)); yR = yR(~isnan(xSpin));
         xSpin = xSpin(~isnan(xSpin)); ySpin = ySpin(~isnan(xSpin));
+        % Apply corrections for either OVF or ASIWizard data
+        switch type
+            case 'mumax'
+                % For OVF files, delete all zero-spin entries to speed up calculation
+                idxZeroSpin = (ySpin == 0 & xSpin == 0);
+                xR(idxZeroSpin)=[];yR(idxZeroSpin)=[];xSpin(idxZeroSpin)=[];ySpin(idxZeroSpin)=[];
+        end
         invSpinLength = 1/length(xSpin);
 
         % Calculating MSF by calling subfunctions fullMSF or halfMSF
-        if exist("app",'var')
+        % Check if the function was called by ASIWizard
+        if exist("app",'var'); isRunningWizard = ~isempty(app); end;
+        if isRunningWizard
             msfDialog = uiprogressdlg(app.IceScannerUI,'Title','Magnetic structure factor','Message',...
                 'Generating the magnetic structure factor. This may take several minutes.');
         end
@@ -59,7 +68,7 @@ function [MSF,MSFTable] = generateMSF(app,steps,qMax,xSpin,ySpin,xR,yR,method,ty
         end
 
         % Generate MSF figure
-        if exist("app",'var')
+        if isRunningWizard
             imageStatus = uiprogressdlg(app.IceScannerUI,'Title','Generating image','Message',...
                 'Generating MSF image for previewing.','Indeterminate','on');
         end
@@ -76,15 +85,15 @@ function [MSF,MSFTable] = generateMSF(app,steps,qMax,xSpin,ySpin,xR,yR,method,ty
             print(msfFigure,sprintf('%sMSF.tif',options.SaveTo),'-dtiffn');
             close(msfFigure);
         end
-        if exist("app",'var'); close(imageStatus); end
+        if isRunningWizard; close(imageStatus); end
         
         % Converts 2D MSF matrix into n*3 matrix, where each column represents qx, qy, and I, respectively
-        if exist("app",'var')
+        if isRunningWizard
             convertStatus = uiprogressdlg(app.IceScannerUI,'Title','Generating text file','Message',...
                 'Exporting MSF text file.','Indeterminate','on');
         end
         for i = 1:length(MSF)
-            if exist("app",'var'); convertStatus.Value = i/length(MSF); end
+            if isRunningWizard; convertStatus.Value = i/length(MSF); end
             for j = 1:length(MSF)
                 % Store qx
                 MSFTable(j + length(MSF)*(i-1),1) = range_qx(i);
@@ -99,11 +108,11 @@ function [MSF,MSFTable] = generateMSF(app,steps,qMax,xSpin,ySpin,xR,yR,method,ty
             end
         end
 
-        if exist("app",'var');close(convertStatus);end
+        if isRunningWizard;close(convertStatus);end
 
     catch ME
         if exist('msfDialog','var'); close(msfDialog); end
-        if exist("app",'var'); errorNotice(app,ME); end
+        if isRunningWizard; errorNotice(app,ME); end
         return;
     end
 
@@ -125,12 +134,14 @@ function [MSF,MSFTable] = generateMSF(app,steps,qMax,xSpin,ySpin,xR,yR,method,ty
             % Define dot product vector between q and r_ij
             q_dot_r = (onesVector_Q'.*q_dot_r_xComp + range_qy.*yR);
             % Calculate A and B
-            A = [sum((xSpin - q_dot_S_dot_qHat_x).*cos(q_dot_r),1);sum((ySpin - q_dot_S_dot_qHat_y).*cos(q_dot_r),1)];
-            B = [sum((xSpin - q_dot_S_dot_qHat_x).*sin(q_dot_r),1);sum((ySpin - q_dot_S_dot_qHat_y).*sin(q_dot_r),1)];
+            V_cos = cos(q_dot_r);
+            V_sin = sin(q_dot_r);
+            A = [sum((xSpin - q_dot_S_dot_qHat_x).*V_cos,1);sum((ySpin - q_dot_S_dot_qHat_y).*V_cos,1)];
+            B = [sum((xSpin - q_dot_S_dot_qHat_x).*V_sin,1);sum((ySpin - q_dot_S_dot_qHat_y).*V_sin,1)];
             MSF(:,x) = invSpinLength * (sum(A.*A,1) + sum(B.*B,1))';
-            if exist("app",'var'); msfDialog.Value = x/doubleSteps; end
+            if isRunningWizard; msfDialog.Value = x/doubleSteps; end
         end
-        if exist("app",'var'); close(msfDialog); end
+        if isRunningWizard; close(msfDialog); end
     end
     % Symmetry-optimized MSF calculation: Solve for MSF intensity at each point
     % in the 1st and 4th quadrants in q-space. Then use inversion symmetry
@@ -159,9 +170,9 @@ function [MSF,MSFTable] = generateMSF(app,steps,qMax,xSpin,ySpin,xR,yR,method,ty
                 % Determine A and B (see Ostman's paper: https://doi.org/10.1038/s41567-017-0027-2)
                 intensity_Q1Q4(y,x) = invSpinLength * ((A'*A) + (B'*B));
             end
-            if exist("app",'var'); msfDialog.Value = x/doubleSteps*2; end
+            if isRunningWizard; msfDialog.Value = x/doubleSteps*2; end
         end
-        if exist("app",'var'); close(msfDialog); end
+        if isRunningWizard; close(msfDialog); end
         % Update MSF
         MSF(:,steps/2+1:end) = intensity_Q1Q4;
         MSF(end:-1:1,steps/2:-1:1) = intensity_Q1Q4;

@@ -29,8 +29,8 @@ function determineSpinVectorComp(app)
 
                     x = -45; % in degrees; can be altered in a future version
                     % Apply rotation transform
-                    app.vd.magnet(alpha).xR = (xPosition*cosd(x) - yPosition*sind(x))*sqrt(2);
-                    app.vd.magnet(alpha).yR = (xPosition*sind(x) + yPosition*cosd(x))*sqrt(2);
+                    app.vd.magnet(alpha).xR = (xPosition*cosd(x) - yPosition*sind(x))*sqrt(2)/2;
+                    app.vd.magnet(alpha).yR = (xPosition*sind(x) + yPosition*cosd(x))*sqrt(2)/2;
                     app.vd.magnet(alpha).xSpin = xSpin*cosd(x) - ySpin*sind(x);
                     app.vd.magnet(alpha).ySpin = xSpin*sind(x) + ySpin*cosd(x);
 
@@ -59,8 +59,8 @@ function determineSpinVectorComp(app)
 
                     % Apply rotation transform
                     x = 0; % in degrees; can be altered in a future version
-                    app.vd.magnet(alpha).xR = (xPosition*cosd(x) - yPosition*sind(x));
-                    app.vd.magnet(alpha).yR = (xPosition*sind(x) + yPosition*cosd(x));
+                    app.vd.magnet(alpha).xR = (xPosition*cosd(x) - yPosition*sind(x))/2;
+                    app.vd.magnet(alpha).yR = (xPosition*sind(x) + yPosition*cosd(x))/2;
                     app.vd.magnet(alpha).xSpin = xSpin*cosd(x) - ySpin*sind(x);
                     app.vd.magnet(alpha).ySpin = xSpin*sind(x) + ySpin*cosd(x);
             end
