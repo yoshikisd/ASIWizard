@@ -45,4 +45,5 @@ function initializeMagnet(app)
     app.vd.magnet(1).uniqueTrinaryInt = [];                 % List of all unique trinary intensities in the magnet ROIs
     app.vd.magnet(1).uniqueTrinaryInt_num = [];             % List number of unique trinary intensities in the magnet ROIs
     app.vd.magnet(1).uniqueTrinaryInt_absSum = [];          % Take the sum of the unique trinary value magnitudes
+    app.vd.magnet(1).roi = [];                              % Image of the magnet ROI
 end

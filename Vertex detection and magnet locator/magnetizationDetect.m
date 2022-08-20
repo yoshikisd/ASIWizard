@@ -97,18 +97,58 @@ function magnetizationDetect(app)
         magnetAreaScanX = cosd(angle)*magnetPerX - sind(angle)*magnetPerY + xMidpoint;
         magnetAreaScanY = sind(angle)*magnetPerX + cosd(angle)*magnetPerY + yMidpoint;
         magnetLocalArea = [magnetAreaScanX',magnetAreaScanY'];
-
         % Remove any portions of the ROI scan that would exceed the edge
         magnetLocalArea(magnetLocalArea(:,1) < 1 | magnetLocalArea(:,1) > app.vd.gridWidth) = NaN;
         magnetLocalArea(magnetLocalArea(:,2) < 1 | magnetLocalArea(:,2) > app.vd.gridHeight) = NaN;
         magnetLocalArea(any(isnan(magnetLocalArea),2) == 1,:) = []; 
         roiScan = poly2mask(magnetLocalArea(:,1),magnetLocalArea(:,2),app.vd.gridHeight,app.vd.gridWidth);%
+        
+        % To save an image of the ROI that has been rotated (edge lies flat with x- and y-axes),
+        % create a duplicate ROI and image set that are globally rotates by "angle"
+
+        % Create rotated image
+        rotContrast = imrotate(app.vd.xmcdCorrectedTrinary,angle,'bilinear');
+        [rotHeight,rotWidth] = size(rotContrast);
+        % Rotate the positions of xMidpoint and yMidpoint relative to the center of the image
+        % First, change the coordinate system so that the midpoints are relative to the origin of the original image
+        xMidOffset = xMidpoint - round(app.vd.gridWidth/2);
+        yMidOffset = round(app.vd.gridHeight/2) - yMidpoint; % Remember that row/column/x/y notations have a weird inversion to them
+        % Next, rotate the coordinate by "angle"
+        xMidRot = xMidOffset*cosd(angle) - yMidOffset*sind(angle);
+        yMidRot = xMidOffset*sind(angle) + yMidOffset*cosd(angle);
+        % Change the coordinate system to correspond with that of the rotated image
+        % Bear in mind that the center of the image will not necessairly correspond with the
+        % center of the imrotate frame; you have to back calculate the true center position
+        xMidRot = xMidRot + round(rotWidth/2);
+        yMidRot = round(rotHeight/2) - yMidRot;
+        % Create new rotated ROI
+        magnetLocalAreaRot = [(magnetPerX + xMidRot)',(magnetPerY + yMidRot)'];
+        roiRot = poly2mask(magnetLocalAreaRot(:,1),magnetLocalAreaRot(:,2),rotHeight,rotWidth);
+        % Save image of the ROI
+        roiXMCD = roiRot.*rotContrast;
+        % Crop the frame
+        [nzRow, nzCol] = find(roiRot);
+        roiXMCD = roiXMCD(min(nzRow(:)):max(nzRow(:)), min(nzCol(:)):max(nzCol(:)));
+        % Correct for rotation interpolation
+        roiXMCD(roiXMCD < -0.1) = -1; roiXMCD(roiXMCD > 0.1) = 1; roiXMCD(abs(roiXMCD) ~= 1) = 0;
+        % Save to magnet structure
+        app.vd.magnet(magInd).roi = roiXMCD;
+        % Save volume-normalized version for EMD calculation
+        roiXMCD = roiXMCD + abs(min(roiXMCD,[],'all')) + 1; % Ensures that there are no zero elements
+        app.vd.magnet(magInd).roiNorm = roiXMCD / sum(roiXMCD,'all');
+
+        % Diagnostic
+        %figure(3);imagesc(app.vd.xmcdCorrectedTrinary);colormap gray;hold on;plot(xMidpoint,yMidpoint,'r.','MarkerSize',15);
+        %plot(magnetAreaScanX,magnetAreaScanY);xlim([xMidpoint-50 xMidpoint+50]);ylim([yMidpoint-50 yMidpoint+50]);hold off;
+        
+        %figure(4);imagesc(roiXMCD);colormap gray;colorbar;clim([-1 1]);
+
 
         % Find out the matrix indices corresponding with the nearest neighboring vertices, but exclude background
         scanRegion = app.vd.xmcdCorrectedTrinary(roiScan == 1);
         %nanImage(roiScan == 1) = app.vd.xmcdCorrectedTrinary(roiScan == 1);
 
-        % Determine the average XMCD contrast balue of all the pixels in the ROI
+        % Determine the average XMCD contrast value of all the pixels in the ROI
         app.vd.magnet(magInd).xmcdAvg = mean(scanRegion,'all');
 
 
