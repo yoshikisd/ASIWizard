@@ -11,23 +11,43 @@ function magnetizationDetect(app)
     magnetWidth = app.magnetWidth.Value;
     
     % This comes into play when we're extracting the ROIs which read the magnetizations
-    % nanImage = NaN(app.vd.gridHeight,app.vd.gridWidth);
     f = uiprogressdlg(app.IceScannerUI,'Title','Detecting and mapping magnetizations');
     % Magnetization interpretation will depend on the contrast mechanism (XMCD or MFM)
     switch app.contrastMode.Value
         case 'XMCD-PEEM'
-            % Process all magnets
-            for magInd = 1:length(app.vd.magnet)
-                f.Value = magInd/length(app.vd.magnet);
-                % Extract magnet positions and ray angle from adjacent vertices
-                [yMidpoint,xMidpoint,angle] = extractMagPosition(app,magInd);
-                % Detect the magnetization through the XMCD signal (autoupdates app.vd)
-                detectXMCD(app,magInd,magnetLength,magnetWidth,xMidpoint,yMidpoint,angle);
-                % Assign mapped Ising magnetization (autoupdates app.vd)
-                magnetizationAssignment(app,magInd,angle);
-                % Change ignore flag to zero
-                app.vd.magnet(magInd).ignoreFlag = false;
-            end
+            %spmd
+                % Process all magnets
+                for magInd = 1:length(app.vd.magnet)
+                    f.Value = magInd/length(app.vd.magnet);
+                    % Extract magnet positions and ray angle from adjacent vertices
+                    [yMidpoint,xMidpoint,angle] = extractMagPosition(app,magInd);
+                    % Detect the magnetization through the XMCD signal (autoupdates app.vd)
+                    detectXMCD(app,magInd,magnetLength,magnetWidth,xMidpoint,yMidpoint,angle);
+                    % Assign mapped Ising magnetization (autoupdates app.vd)
+                    magnetizationAssignment(app,magInd,angle);
+                    % Change ignore flag to zero
+                    app.vd.magnet(magInd).ignoreFlag = false;
+                end
+                % Call the EMD-detecting function
+                if magnetLength > magnetWidth
+                    numCols = magnetLength;
+                    numRows = magnetWidth;
+                else
+                    numCols = magnetWidth;
+                    numRows = magnetLength;
+                end
+
+                [EMDMtx,detectState,confidence] = ...
+                    magDetectEMD('/home/yoshikisd/ASIWizard/ASIWizard/Reference images',app.vd.magnet,numRows,numCols,app);
+
+                % Save madDetectEMD information to magnet
+                for i = 1:length(app.vd.magnet)
+                    app.vd.magnet(i).EMDMtx = EMDMtx(i,:);
+                    app.vd.magnet(i).detectState = detectState(i);
+                    app.vd.magnet(i).confidence = confidence(i);
+                end
+                1 + 1;
+            %end
         case 'MFM'
             % Process all magnets
             for magInd = 1:length(app.vd.magnet)
@@ -64,6 +84,7 @@ function magnetizationDetect(app)
         double(max(app.vd.magnetInterpretCombined,[],'all')/2)]);
 
     %% Pulling information about magnet position and the ray casted from the adjacent vertices
+    %{
     function [yMidpoint,xMidpoint,angle] = extractMagPosition(app,magInd)
         % Pull information about magnet center location
         yMidpoint = app.vd.magnet(magInd).rowYPos;
@@ -86,8 +107,10 @@ function magnetizationDetect(app)
         dy = nbrYPos - currYPos;
         angle = atan2d(dy,dx);
     end
+    %}
 
     %% Detection for XMCD-PEEM images
+    %{
     function detectXMCD(app,magInd,magnetLength,magnetWidth,xMidpoint,yMidpoint,angle)
         % Create perimeter for performing ROI scan of the magnetic contrast
         magnetPerX = magnetLength/2 * [-1:0.02:1,ones(1,length(-1:0.02:1)),1:-0.02:-1,-ones(1,length(-1:0.02:1))];
@@ -101,13 +124,14 @@ function magnetizationDetect(app)
         magnetLocalArea(magnetLocalArea(:,1) < 1 | magnetLocalArea(:,1) > app.vd.gridWidth) = NaN;
         magnetLocalArea(magnetLocalArea(:,2) < 1 | magnetLocalArea(:,2) > app.vd.gridHeight) = NaN;
         magnetLocalArea(any(isnan(magnetLocalArea),2) == 1,:) = []; 
-        roiScan = poly2mask(magnetLocalArea(:,1),magnetLocalArea(:,2),app.vd.gridHeight,app.vd.gridWidth);%
+        roiScan = poly2mask(magnetLocalArea(:,1),magnetLocalArea(:,2),app.vd.gridHeight,app.vd.gridWidth);
         
         % To save an image of the ROI that has been rotated (edge lies flat with x- and y-axes),
         % create a duplicate ROI and image set that are globally rotates by "angle"
 
-        % Create rotated image
+        % Create rotated images of both corrected and raw XMCD images
         rotContrast = imrotate(app.vd.xmcdCorrectedTrinary,angle,'bilinear');
+        rotContrastRaw = imrotate(app.vd.xmcd,angle,'bilinear');
         [rotHeight,rotWidth] = size(rotContrast);
         % Rotate the positions of xMidpoint and yMidpoint relative to the center of the image
         % First, change the coordinate system so that the midpoints are relative to the origin of the original image
@@ -126,31 +150,27 @@ function magnetizationDetect(app)
         roiRot = poly2mask(magnetLocalAreaRot(:,1),magnetLocalAreaRot(:,2),rotHeight,rotWidth);
         % Save image of the ROI
         roiXMCD = roiRot.*rotContrast;
+        roiXMCDRaw = roiRot.*rotContrastRaw;
         % Crop the frame
         [nzRow, nzCol] = find(roiRot);
         roiXMCD = roiXMCD(min(nzRow(:)):max(nzRow(:)), min(nzCol(:)):max(nzCol(:)));
-        % Correct for rotation interpolation
+        roiXMCDRaw = roiXMCDRaw(min(nzRow(:)):max(nzRow(:)), min(nzCol(:)):max(nzCol(:)));
+        % For trinarized image, correct for rotation interpolation
         roiXMCD(roiXMCD < -0.1) = -1; roiXMCD(roiXMCD > 0.1) = 1; roiXMCD(abs(roiXMCD) ~= 1) = 0;
         % Save to magnet structure
         app.vd.magnet(magInd).roi = roiXMCD;
+        app.vd.magnet(magInd).roiRaw = roiXMCDRaw;
         % Save volume-normalized version for EMD calculation
         roiXMCD = roiXMCD + abs(min(roiXMCD,[],'all')) + 1; % Ensures that there are no zero elements
         app.vd.magnet(magInd).roiNorm = roiXMCD / sum(roiXMCD,'all');
-
-        % Diagnostic
-        %figure(3);imagesc(app.vd.xmcdCorrectedTrinary);colormap gray;hold on;plot(xMidpoint,yMidpoint,'r.','MarkerSize',15);
-        %plot(magnetAreaScanX,magnetAreaScanY);xlim([xMidpoint-50 xMidpoint+50]);ylim([yMidpoint-50 yMidpoint+50]);hold off;
-        
-        %figure(4);imagesc(roiXMCD);colormap gray;colorbar;clim([-1 1]);
-
+        roiXMCDRaw = roiXMCDRaw + abs(min(roiXMCDRaw,[],'all')) + 1; % Ensures that there are no zero elements
+        app.vd.magnet(magInd).roiNormRaw = roiXMCDRaw / sum(roiXMCDRaw,'all');
 
         % Find out the matrix indices corresponding with the nearest neighboring vertices, but exclude background
         scanRegion = app.vd.xmcdCorrectedTrinary(roiScan == 1);
-        %nanImage(roiScan == 1) = app.vd.xmcdCorrectedTrinary(roiScan == 1);
 
         % Determine the average XMCD contrast value of all the pixels in the ROI
         app.vd.magnet(magInd).xmcdAvg = mean(scanRegion,'all');
-
 
         % Determine and save XMCD contrast values
         % First, determine the weights associated with black/white pixel population
@@ -183,6 +203,7 @@ function magnetizationDetect(app)
         app.vd.magnetInterpretCombined(roiScan == 1) = app.vd.magnet(magInd).xmcdWeighted;
         %app.vd.magnetEntropy(roiScan == 1) = app.vd.magnet(magInd).xmcdEntropy;
     end
+    %}
     
     %% Detection for MFM images
     function detectMFM(app,magInd,magnetLength,magnetWidth,xMidpoint,yMidpoint,angle)
@@ -234,8 +255,6 @@ function magnetizationDetect(app)
         % Read the magnetizations in the regions and save the ROIs in an image form
         leftScanRegion = app.vd.xmcdCorrectedTrinary(leftMFMScan);
         rightScanRegion = app.vd.xmcdCorrectedTrinary(rightMFMScan);
-        %nanImage(leftMFMScan) = app.vd.xmcdCorrectedTrinary(leftMFMScan);
-        %nanImage(rightMFMScan) = app.vd.xmcdCorrectedTrinary(rightMFMScan);
 
         % Average the intensity within the scanned ROIs
         leftMean = sum(leftScanRegion,'all')/numel(leftScanRegion);
@@ -291,6 +310,7 @@ function magnetizationDetect(app)
     end
 
     %% Assignment of Ising magnetization vectors
+    %{
     function magnetizationAssignment(app,magInd,angle)
         % Assign the lateral orientation (black is -1/left, white is +1/right)
         magnetizationIntensity = app.vd.magnet(magInd).xmcdTrinary;
@@ -335,4 +355,5 @@ function magnetizationDetect(app)
             app.vd.magnet(magInd).spinPlotYOffset = app.vd.magnet(magInd).rowYPos + 7*sind(angle);
         end
     end
+    %}
 end

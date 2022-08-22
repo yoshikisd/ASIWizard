@@ -45,5 +45,8 @@ function initializeMagnet(app)
     app.vd.magnet(1).uniqueTrinaryInt = [];                 % List of all unique trinary intensities in the magnet ROIs
     app.vd.magnet(1).uniqueTrinaryInt_num = [];             % List number of unique trinary intensities in the magnet ROIs
     app.vd.magnet(1).uniqueTrinaryInt_absSum = [];          % Take the sum of the unique trinary value magnitudes
-    app.vd.magnet(1).roi = [];                              % Image of the magnet ROI
+    app.vd.magnet(1).roi = [];                              % Trinarized image of the magnet ROI
+    app.vd.magnet(1).roiRaw = [];                           % Raw image of the magnet ROI
+    app.vd.magnet(1).roiNorm = [];                          % Area-normalized intensity for EMD calculation
+    app.vd.magnet(1).roiNormRaw = [];                       % Area-normalized intensity for EMD calculation
 end
